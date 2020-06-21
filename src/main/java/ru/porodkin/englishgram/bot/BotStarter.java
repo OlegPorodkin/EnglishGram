@@ -15,7 +15,6 @@ public class BotStarter {
     }
 
     public void botStart(LongPollingBot bot) {
-        ApiContextInitializer.init();
         try {
             botsApi.registerBot(bot);
         } catch (TelegramApiRequestException e) {
