@@ -1,6 +1,7 @@
 package ru.porodkin.englishgram.service.translator;
 
 import org.apache.hc.client5.http.ClientProtocolException;
+import org.apache.hc.client5.http.classic.methods.HttpGet;
 import org.apache.hc.client5.http.classic.methods.HttpPost;
 import org.apache.hc.client5.http.impl.classic.CloseableHttpClient;
 import org.apache.hc.client5.http.impl.classic.HttpClients;
@@ -11,6 +12,7 @@ import org.apache.hc.core5.http.ParseException;
 import org.apache.hc.core5.http.io.HttpClientResponseHandler;
 import org.apache.hc.core5.http.io.entity.EntityUtils;
 import org.apache.hc.core5.http.io.entity.StringEntity;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.io.BufferedReader;
@@ -20,6 +22,36 @@ import java.io.InputStreamReader;
 
 @Service
 public class YandexTranslator {
+
+    @Value("${key}")
+    private String key;
+
+    final HttpClientResponseHandler<String> responseHandler = response -> {
+        final int status = response.getCode();
+        if (status >= HttpStatus.SC_SUCCESS && status < HttpStatus.SC_REDIRECTION) {
+            final HttpEntity entity = response.getEntity();
+            try {
+                return entity != null ? EntityUtils.toString(entity) : null;
+            } catch (final ParseException ex) {
+                throw new ClientProtocolException(ex);
+            }
+        } else {
+            throw new ClientProtocolException("Unexpected response status: " + status);
+        }
+    };
+
+    public String dictionaryWords(String word){
+        String result = null;
+        try (final CloseableHttpClient httpClient = HttpClients.createDefault()) {
+            HttpGet get = new HttpGet("https://dictionary.yandex.net/api/v1/dicservice.json/lookup?key="+key+"&lang=en-ru&text="+ word);
+
+            result = httpClient.execute(get, responseHandler);
+
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+        return result;
+    }
 
     public String translateWord(String word) {
         String result = null;
@@ -42,19 +74,19 @@ public class YandexTranslator {
 
             post.setEntity(body);
 
-            final HttpClientResponseHandler<String> responseHandler = response -> {
-                final int status = response.getCode();
-                if (status >= HttpStatus.SC_SUCCESS && status < HttpStatus.SC_REDIRECTION) {
-                    final HttpEntity entity = response.getEntity();
-                    try {
-                        return entity != null ? EntityUtils.toString(entity) : null;
-                    } catch (final ParseException ex) {
-                        throw new ClientProtocolException(ex);
-                    }
-                } else {
-                    throw new ClientProtocolException("Unexpected response status: " + status);
-                }
-            };
+//            final HttpClientResponseHandler<String> responseHandler = response -> {
+//                final int status = response.getCode();
+//                if (status >= HttpStatus.SC_SUCCESS && status < HttpStatus.SC_REDIRECTION) {
+//                    final HttpEntity entity = response.getEntity();
+//                    try {
+//                        return entity != null ? EntityUtils.toString(entity) : null;
+//                    } catch (final ParseException ex) {
+//                        throw new ClientProtocolException(ex);
+//                    }
+//                } else {
+//                    throw new ClientProtocolException("Unexpected response status: " + status);
+//                }
+//            };
             result = httpClient.execute(post, responseHandler);
 
         } catch (IOException e) {

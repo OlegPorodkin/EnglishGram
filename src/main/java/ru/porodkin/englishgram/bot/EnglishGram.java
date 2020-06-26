@@ -1,5 +1,6 @@
 package ru.porodkin.englishgram.bot;
 
+import com.google.common.base.Strings;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.telegram.telegrambots.bots.TelegramLongPollingBot;
@@ -11,6 +12,7 @@ import ru.porodkin.englishgram.service.translator.YandexTranslator;
 
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 
 @Component
@@ -50,8 +52,11 @@ public class EnglishGram extends TelegramLongPollingBot {
                 } else {
 
                     String responseJsonFromYandex = translator.translateWord(wordToSave);
+                    String dictionary = translator.dictionaryWords(wordToSave);
+
                     /*++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++*/
                     String result = parser.extractText(responseJsonFromYandex);
+                    List<String> dictionaryResult = parser.extractDictionary(dictionary);
 
                     if (result.matches(".[a-zA-Z]*")) {
                         sendMessage(update, result + " - не корректное слово для перевода");
@@ -62,7 +67,7 @@ public class EnglishGram extends TelegramLongPollingBot {
                             words.add(result);
                             bd.put(wordToSave.toLowerCase(), words);
                         } else {
-                            sendMessage(update, result);
+                            sendMessage(update, result, dictionaryResult);
                             Set<String> wordsNew = new HashSet<>();
                             wordsNew.add(result);
                             bd.put(wordToSave.toLowerCase(), wordsNew);
@@ -76,9 +81,15 @@ public class EnglishGram extends TelegramLongPollingBot {
     }
 
     private void sendMessage(Update update, String massage) {
+        sendMessage(update, massage, null);
+    }
+
+    private void sendMessage(Update update, String massage, List<String> massages) {
+        String promo = Strings.lenientFormat("ПЕРЕВОД: %s\nВозможные значения:\n %s \n\n\n«Переведено сервисом «Яндекс.Переводчик» \nhttp://translate.yandex.ru \n«Реализовано с помощью сервиса «API «Яндекс.Словарь» \nhttp://api.yandex.ru/dictionary \n",massage, massages);
+
         SendMessage incorrectMessage = new SendMessage()
                 .setChatId(update.getMessage().getChatId())
-                .setText(massage);
+                .setText(promo);
         try {
             execute(incorrectMessage);
         } catch (TelegramApiException e) {
