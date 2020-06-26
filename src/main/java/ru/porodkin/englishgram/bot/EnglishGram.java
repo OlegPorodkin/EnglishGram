@@ -1,25 +1,17 @@
 package ru.porodkin.englishgram.bot;
 
-import org.apache.http.HttpResponse;
-import org.apache.http.NameValuePair;
-import org.apache.http.client.ClientProtocolException;
-import org.apache.http.client.HttpClient;
-import org.apache.http.client.entity.UrlEncodedFormEntity;
-import org.apache.http.client.methods.HttpPost;
-import org.apache.http.impl.client.DefaultHttpClient;
-import org.apache.http.message.BasicNameValuePair;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.telegram.telegrambots.bots.TelegramLongPollingBot;
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
 import org.telegram.telegrambots.meta.api.objects.Update;
 import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
+import ru.porodkin.englishgram.service.parser.JsonParser;
+import ru.porodkin.englishgram.service.translator.YandexTranslator;
 
-import java.io.BufferedReader;
-import java.io.IOException;
-import java.io.InputStreamReader;
-import java.io.UnsupportedEncodingException;
-import java.util.*;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Set;
 
 @Component
 public class EnglishGram extends TelegramLongPollingBot {
@@ -29,81 +21,54 @@ public class EnglishGram extends TelegramLongPollingBot {
     @Value("${token}")
     private String token;
 
+    private final YandexTranslator translator;
+    private final JsonParser parser;
+
     HashMap<String, Set<String>> bd = new HashMap<>();
+
+    public EnglishGram(YandexTranslator translator, JsonParser parser) {
+        this.translator = translator;
+        this.parser = parser;
+    }
 
     @Override
     public void onUpdateReceived(Update update) {
-
         if (update.hasMessage() && update.getMessage().hasText()) {
-
             saveWordToDateBase(update);
-
-            bd.entrySet().stream().forEach(e -> {
-                System.out.println(e.getKey() + " : " + e.getValue());
-            });
         }
     }
 
     private void saveWordToDateBase(Update update) {
 
         if (update.getMessage().isUserMessage()) {
-            StringBuffer result = null;
             String wordToSave = update.getMessage().getText();
 
             if (wordToSave.toLowerCase().matches(".[a-z]*")) {
 
-                if (bd.containsKey(wordToSave)) {
-                    bd.get(wordToSave).stream().forEach(word -> sendMessage(update, word));
+                if (bd.containsKey(wordToSave.toLowerCase())) {
+                    bd.get(wordToSave.toLowerCase()).stream().forEach(word -> sendMessage(update, word));
                 } else {
+
+                    String responseJsonFromYandex = translator.translateWord(wordToSave);
                     /*++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++*/
+                    String result = parser.extractText(responseJsonFromYandex);
 
-                    try {
-                        HttpClient httpClient = new DefaultHttpClient();
-                        HttpPost post = new HttpPost("https://www.webtran.ru/gtranslate/");
-
-                        List<NameValuePair> urlParameters = new ArrayList<>();
-                        urlParameters.add(new BasicNameValuePair("text", wordToSave));
-                        urlParameters.add(new BasicNameValuePair("gfrom", "en"));
-                        urlParameters.add(new BasicNameValuePair("gto", "ru"));
-                        urlParameters.add(new BasicNameValuePair("key", "630340450ru5"));
-
-                        post.setEntity(new UrlEncodedFormEntity(urlParameters));
-
-                        HttpResponse response = httpClient.execute(post);
-
-                        BufferedReader rd = new BufferedReader(new InputStreamReader(response.getEntity().getContent()));
-                        result = new StringBuffer();
-                        String line = "";
-                        while ((line = rd.readLine()) != null) {
-                            result.append(line);
-                        }
-
-                        sendMessage(update, result.toString());
-
-                    } catch (UnsupportedEncodingException e) {
-                        e.printStackTrace();
-                    } catch (ClientProtocolException e) {
-                        e.printStackTrace();
-                    } catch (IOException e) {
-                        e.printStackTrace();
-                    }
-
-                    /*++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++*/
-                    if (result.toString().matches(".[a-zA-Z]*")) {
-                        sendMessage(update, result.toString() + " - не корректное слово для перевода");
+                    if (result.matches(".[a-zA-Z]*")) {
+                        sendMessage(update, result + " - не корректное слово для перевода");
                     } else {
                         Set<String> words = bd.get(wordToSave.toLowerCase());
+
                         if (words != null) {
-                            words.add(result.toString());
+                            words.add(result);
                             bd.put(wordToSave.toLowerCase(), words);
                         } else {
+                            sendMessage(update, result);
                             Set<String> wordsNew = new HashSet<>();
-                            wordsNew.add(result.toString());
+                            wordsNew.add(result);
                             bd.put(wordToSave.toLowerCase(), wordsNew);
                         }
                     }
                 }
-
             } else {
                 sendMessage(update, "Неверный формат сообщения!");
             }
