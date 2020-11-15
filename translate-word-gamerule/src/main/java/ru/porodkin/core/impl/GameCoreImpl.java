@@ -1,13 +1,20 @@
 package ru.porodkin.core.impl;
 
 import ru.porodkin.core.GameCore;
+import ru.porodkin.core.dao.WordDao;
 import ru.porodkin.core.exceptions.CoreException;
 
 public class GameCoreImpl implements GameCore {
 
+    private final WordDao dao;
+
+    public GameCoreImpl(WordDao dao) {
+        this.dao = dao;
+    }
+
     @Override
     public String guessWord() {
-        return null;
+        return dao.getWord();
     }
 
     @Override
